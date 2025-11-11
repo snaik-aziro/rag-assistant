@@ -3,6 +3,7 @@
 Flask Web Server for RAG Chatbot UI
 """
 
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -108,7 +109,32 @@ def status():
         }), 500
 
 if __name__ == '__main__':
-    print("🚀 Starting RAG Chatbot Web Server...")
-    print("📱 Open http://localhost:5000 in your browser")
-    app.run(debug=True, host='0.0.0.0', port=5002)
+    print("🚀 Starting Release Dashboard AI Assistant...")
+
+    parser = argparse.ArgumentParser(
+        description="Release Dashboard AI Assistant Web Server"
+    )
+    parser.add_argument(
+        "--host", default="0.0.0.0",
+        help="Host interface to bind (default: 0.0.0.0)"
+    )
+    parser.add_argument(
+        "--port", type=int, default=int(os.getenv("PORT", "5002")),
+        help="Port to serve the web UI (default: 5002)"
+    )
+    parser.add_argument(
+        "--debug", action="store_true",
+        help="Enable Flask debug mode with auto reload (default: off)"
+    )
+    args = parser.parse_args()
+
+    visible_host = "localhost" if args.host in ("0.0.0.0", "127.0.0.1") else args.host
+    print(f"📱 Open http://{visible_host}:{args.port} in your browser")
+
+    app.run(
+        debug=args.debug,
+        host=args.host,
+        port=args.port,
+        use_reloader=args.debug
+    )
 

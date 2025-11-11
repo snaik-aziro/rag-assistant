@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Local LLM Chatbot with RAG - Terminal-based chatbot using Ollama with ChromaDB for context retrieval
+Local LLM Chatbot with RAG - Terminal-based chatbot using Ollama with a lightweight vector store for context retrieval
 """
 
 import os
@@ -14,7 +14,7 @@ from colorama import init
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
-import chromadb
+from vector_store import SimpleVectorStore
 
 # Initialize colorama and rich console
 init(autoreset=True)
@@ -30,8 +30,8 @@ class LocalChatbot:
         self.conversation_history: List[Dict[str, str]] = []
         self.max_history_length = 10  # Keep last 10 exchanges
         
-        # Initialize ChromaDB for RAG
-        self.chroma_collection = None
+        # Initialize vector store for RAG
+        self.vector_store: Optional[SimpleVectorStore] = None
         if self.use_rag:
             self._initialize_vectordb()
 
@@ -94,86 +94,71 @@ class LocalChatbot:
             console.print(f"[red]Error checking models: {e}[/red]")
             return False
 
-    def _initialize_vectordb(self):
-        """Initialize ChromaDB vector database with conversation data"""
+    def _initialize_vectordb(self) -> None:
+        """Initialize the lightweight vector store with conversation data."""
         try:
-            chroma_client = chromadb.Client()
-            
-            # Get or create collection
-            try:
-                self.chroma_collection = chroma_client.get_collection(name="release_dashboard_chat")
-                console.print("[green]✓ Loaded existing ChromaDB collection[/green]")
-            except:
-                # Create new collection and add data
-                self.chroma_collection = chroma_client.create_collection(name="release_dashboard_chat")
-                
-                # Google Chat conversation data - Release Dashboard Project
-                conversation_documents = [
-                    "Sagar Naik: Hi @Gautam Kumar @Shilav Shinde, do we have backlog created for release dashboard. Is the KT done",
-                    "Shilav Shinde, Aug 7, 9:12 AM: Hi @Sagar Naik. Waiting for client laptop, not yet received. On last Monday, done the cisco secureIT password setup process.",
-                    "Gautam Kumar, Aug 7, 11:05 AM: Hi @Sagar Naik, I have given some brief about the project and codebase, as in what could be there, but proper KT hasn't started since Shilav hasn't received the laptop yet.",
-                    "Sagar Naik, Aug 7, 11:15 AM: What about the backlog, do we know the work and timeline",
-                    "Gautam Kumar, Aug 7, 11:19 AM: I don't have any jira tickets for the backlog, the timeline is still on the mail. You want me to create tickets for detail?",
-                    "Sagar Naik, Aug 7, 11:35 AM: Yes, please",
-                    "Gautam Kumar, Aug 7, 11:35 AM: Okay. I will create today.",
-                    "Gautam Kumar, Aug 7, 5:04 PM: Hi @Sagar Naik, I have created Jira tickets for the backlog: Search Functionality - PNC-55365, Package version enhancements - PNC-55366, JQL Query updates - PNC-55367 (Completed), Dev/QA Env - PNC-55368, R&D for Manual Updates & Backfilling - PNC-55369",
-                    "Sagar Naik, Sep 17, 7:36 PM: Hi @all. Please check if there is any 1.x or 3.x release today. I don't want to see any missing data of patch or hotfix",
-                    "Shilav Shinde, Sep 17, 7:56 PM: Hi @Sagar Naik. 3.0.50.036 patch is active on today, Dev cutoff job yet to be completed for this patch so I'll be keep monitoring",
-                    "Sagar Naik, Sep 18, 10:05 AM: I still don't see data on 34, what's the issue",
-                    "Sagar Naik, Sep 18, 10:11 AM: Also send me the link for version 3.0.50.035.001 @Gautam Kumar @Shilav Shinde",
-                    "Shilav Shinde, Sep 18, 10:33 AM: Hi @Sagar Naik. As we don't have changelog data for 34, that's why we are unable to see the changelog details. Link: https://releasedashboard.cisco.com/change-log?selectedRelease=3.0.50.035.001&releaseName=3.0.50.035&releaseId=78&releaseType=Hotfix&version=3.0&category=3.0&startDate=9+Sep+2025&releaseDisplayName=3.0.50.035&parentReleaseName=Diamond&isCompletedRelease=false",
-                    "Sagar Naik, Sep 19, 12:25 PM: Hi @Shilav Shinde, can we have a session from you at 2.30 for release dashboard",
-                    "Shilav Shinde, Sep 19, 12:28 PM: Hi @Sagar Naik. Till now I got a brief idea about release dashboard, if you want a session I can give like whatever I have explore. But not much aware about all the factors/things of release dashboard.",
-                    "Sagar Naik, Sep 19, 12:29 PM: Fine, just explain the functionality and future plans, not the whole code. Explain what challenges you have faced etc. @Gautam Kumar can add more",
-                    "Shilav Shinde, Sep 19, 12:30 PM: Sure @Sagar Naik",
-                    "Gautam Kumar, Sep 19, 2:22 PM: Sure @Sagar Naik",
-                    "Sagar Naik, Sep 23, 11:57 AM: Hi. Please send status of the release dashboard. Did we connect with Sarf",
-                    "Shilav Shinde, Sep 23, 12:11 PM: Hi @Sagar Naik. On September 16th, I messaged Sarf to provide the changelog details for the platform refresh in release 3.0.50.035. He provided the scrubber and based on that, added the changelog details for the platform refresh in release 035.",
-                    "Sagar Naik, Sep 23, 12:13 PM: Any other release right now",
-                    "Shilav Shinde, Sep 23, 12:24 PM: The current active release is 3.0.50.036. This patch supposed to be promoted by today but it has been rescheduled, so it will be promoted on Thursday (25th September). I will be monitoring",
-                    "Sagar Naik, Sep 23, 12:24 PM: Sarf will promote it right, you should not do it, he should",
-                    "Shilav Shinde, Sep 23, 12:37 PM: No need to promote it to Sarf, the cron job promoted itself.",
-                    "Shilav Shinde, Sep 23, 1:52 PM: Hi @Sagar Naik. I reached out to Karthik for a DB setup meeting, but we haven't been able to connect yet. I followed up with him again today and am waiting for his response, as there is a dependency on him.",
-                    "Sagar Naik, Sep 23, 1:54 PM: Ping him on the group with Naresh on cc",
-                    "Sagar Naik, Sep 24, 7:39 PM: Please send me the status. Also send mail to Manjunadh @Shilav Shinde",
-                    "Shilav Shinde, Sep 24, 7:55 PM: Hi @Sagar Naik. I have already shared weekly status update mail to Manjunadh.",
-                    "Shilav Shinde, Sep 24, 8:00 PM: PNC-55366: We are not supporting the hyphenated version that's why in the add package functionality we have restricted hyphenated version, I'm working on it. As an immediate solution, we can add the package details from backend because of restriction for hyphenated version.",
-                    "Sagar Naik, Sep 24, 10:34 PM: Patch 34 does not have data. Can you clarify @Shilav Shinde. Link: https://releasedashboard.cisco.com/change-log?selectedRelease=3.0.50.034&releaseName=3.0.50.X&releaseId=58&releaseType=Patch&version=3.0&category=3.0&startDate=27+Nov+2024&releaseDisplayName=3.0.50.X&parentReleaseName=Diamond&isCompletedRelease=false&templateName=Confidence+template",
-                    "Shilav Shinde, Sep 24, 10:37 PM: As we don't have changelog data for patch 34",
-                    "Sagar Naik, Sep 24, 10:38 PM: What about 3.0.50.35.3",
-                    "Shilav Shinde, Sep 24, 10:41 PM: Checking on it..will let you know in sometime",
-                    "Sagar Naik, Sep 24, 10:50 PM: Ok",
-                    "Sagar Naik, Sep 24, 10:53 PM: Also check dates",
-                    "Shilav Shinde, Sep 24, 10:53 PM: Okay, sure",
-                    "Shilav Shinde, Sep 25, 9:34 AM: Hi @Sagar Naik. Added 'gateway' package for 3.0.50.035.002 manually from backend and created 3.0.50.035.003 hotfix. Also modified the date for 002 and 003 both. As we don't have data in releasechangelogs collection for 002 and 003, that's why both showing current patch in release dashboard. Also checked for release 036, showing 25th Sep 2025 as pd promotion date, it supposed to be extend by 30 Sep.",
-                    "Shilav Shinde, Oct 1, 11:21 AM: Hi @Sagar Naik. Quick update on the database backup - We have tried to back up the database using the mongo command with port forwarding to access the database. However, the OpenShift (OC) connection was disconnected during the process, which caused the backup operation to fail. We also implemented logic to retry the connection and resume the backup from where it stopped, but OC continued to deny the connection.",
-                    "Sagar Naik, Oct 8, 1:18 PM: Hi. Any update on db backup and other things",
-                    "Shilav Shinde, Oct 8, 1:19 PM: Hi",
-                    "Shilav Shinde, Oct 8, 1:25 PM: It's in progress. I'll provide you with a detailed update on the db_backup by evening. Still working on it.",
-                    "Sagar Naik, Oct 8, 1:40 PM: Ok",
-                    "Shilav Shinde, Oct 23, 9:19 AM: Hi @Sagar Naik. Health Check for Collections and status of release dashboard - Release 3.0.50.040 has started. As of now its in PD promotion stage, there is no data available since we don't have data in releasechangelogs collection. PD and PnC Tags - No tags data in pdpnctags collection for 040, Earlier received tags data for 039 release. Metrics Job Last Run (tenants) = '2025-10-01T05:30:00Z' (base_url: https://miggbo.atlassian.net/, jira_type:'cloud'). Releasechangelogs - No release change logs data available for 040. Earlier have releasechangelog data for 039. Tags - release/0.10.532, rc/0.10.533 fetched tags of core-platform package on 22-10-2025. cc: @Gautam Kumar",
-                    "Sagar Naik, Oct 24, 9:20 AM: Release 3.0.50.040 has started. As of now its in PD promotion stage, there is no data available since we don't have data in releasechangelogs collection. Support for hyphenated version task (PNC-55366): Done code changes, testing is in progress. DB backup mechanism and test environment (PNC-57488): awaiting a VM, accessible from the CAE console, from Karthikeyan to proceed with testing the workaround. No progress on backup and hyphenated version since 2 weeks?",
-                    "Shilav Shinde, Oct 24, 10:05 AM: Hi @Sagar Naik. We were unable to test the code changes of Hyphenated version due to dev environment. A VM is pending provision to proceed with testing the database backup activity. In the meantime, I implemented a workaround to test the code changes with the local database and am now validating those changes.",
-                    "Sagar Naik, Oct 24, 10:07 AM: Get it merged after validation. It should not affect the dashboard",
-                    "Shilav Shinde, Oct 24, 10:10 AM: Sure @Sagar Naik",
-                    "Shilav Shinde, Oct 29, 10:47 AM: Hi @Sagar Naik. Health Check for Collections and status of release dashboard - Release 3.0.50.041 has started. As of now its in PD promotion stage. Release 3.0.50.040 has been promoted, and the release change logs data is also available. PD and PnC Tags, Tags, Releasechangelogs, tenants collection data are up to date. cc: @Gautam Kumar",
-                ]
-                
-                # Add documents to collection
-                document_ids = [f"msg_{i+1}" for i in range(len(conversation_documents))]
-                self.chroma_collection.add(
-                    ids=document_ids,
-                    documents=conversation_documents
-                )
-                console.print(f"[green]✓ Initialized ChromaDB with {len(conversation_documents)} conversation messages[/green]")
-        except Exception as e:
-            console.print(f"[yellow]Warning: Could not initialize ChromaDB: {e}[/yellow]")
+            store = SimpleVectorStore()
+            conversation_documents = [
+                "Sagar Naik: Hi @Gautam Kumar @Shilav Shinde, do we have backlog created for release dashboard. Is the KT done",
+                "Shilav Shinde, Aug 7, 9:12 AM: Hi @Sagar Naik. Waiting for client laptop, not yet received. On last Monday, done the cisco secureIT password setup process.",
+                "Gautam Kumar, Aug 7, 11:05 AM: Hi @Sagar Naik, I have given some brief about the project and codebase, as in what could be there, but proper KT hasn't started since Shilav hasn't received the laptop yet.",
+                "Sagar Naik, Aug 7, 11:15 AM: What about the backlog, do we know the work and timeline",
+                "Gautam Kumar, Aug 7, 11:19 AM: I don't have any jira tickets for the backlog, the timeline is still on the mail. You want me to create tickets for detail?",
+                "Sagar Naik, Aug 7, 11:35 AM: Yes, please",
+                "Gautam Kumar, Aug 7, 11:35 AM: Okay. I will create today.",
+                "Gautam Kumar, Aug 7, 5:04 PM: Hi @Sagar Naik, I have created Jira tickets for the backlog: Search Functionality - PNC-55365, Package version enhancements - PNC-55366, JQL Query updates - PNC-55367 (Completed), Dev/QA Env - PNC-55368, R&D for Manual Updates & Backfilling - PNC-55369",
+                "Sagar Naik, Sep 17, 7:36 PM: Hi @all. Please check if there is any 1.x or 3.x release today. I don't want to see any missing data of patch or hotfix",
+                "Shilav Shinde, Sep 17, 7:56 PM: Hi @Sagar Naik. 3.0.50.036 patch is active on today, Dev cutoff job yet to be completed for this patch so I'll be keep monitoring",
+                "Sagar Naik, Sep 18, 10:05 AM: I still don't see data on 34, what's the issue",
+                "Sagar Naik, Sep 18, 10:11 AM: Also send me the link for version 3.0.50.035.001 @Gautam Kumar @Shilav Shinde",
+                "Shilav Shinde, Sep 18, 10:33 AM: Hi @Sagar Naik. As we don't have changelog data for 34, that's why we are unable to see the changelog details. Link: https://releasedashboard.cisco.com/change-log?selectedRelease=3.0.50.035.001&releaseName=3.0.50.035&releaseId=78&releaseType=Hotfix&version=3.0&category=3.0&startDate=9+Sep+2025&releaseDisplayName=3.0.50.035&parentReleaseName=Diamond&isCompletedRelease=false",
+                "Sagar Naik, Sep 19, 12:25 PM: Hi @Shilav Shinde, can we have a session from you at 2.30 for release dashboard",
+                "Shilav Shinde, Sep 19, 12:28 PM: Hi @Sagar Naik. Till now I got a brief idea about release dashboard, if you want a session I can give like whatever I have explore. But not much aware about all the factors/things of release dashboard.",
+                "Sagar Naik, Sep 19, 12:29 PM: Fine, just explain the functionality and future plans, not the whole code. Explain what challenges you have faced etc. @Gautam Kumar can add more",
+                "Shilav Shinde, Sep 19, 12:30 PM: Sure @Sagar Naik",
+                "Gautam Kumar, Sep 19, 2:22 PM: Sure @Sagar Naik",
+                "Sagar Naik, Sep 23, 11:57 AM: Hi. Please send status of the release dashboard. Did we connect with Sarf",
+                "Shilav Shinde, Sep 23, 12:11 PM: Hi @Sagar Naik. On September 16th, I messaged Sarf to provide the changelog details for the platform refresh in release 3.0.50.035. He provided the scrubber and based on that, added the changelog details for the platform refresh in release 035.",
+                "Sagar Naik, Sep 23, 12:13 PM: Any other release right now",
+                "Shilav Shinde, Sep 23, 12:24 PM: The current active release is 3.0.50.036. This patch supposed to be promoted by today but it has been rescheduled, so it will be promoted on Thursday (25th September). I will be monitoring",
+                "Sagar Naik, Sep 23, 12:24 PM: Sarf will promote it right, you should not do it, he should",
+                "Shilav Shinde, Sep 23, 12:37 PM: No need to promote it to Sarf, the cron job promoted itself.",
+                "Shilav Shinde, Sep 23, 1:52 PM: Hi @Sagar Naik. I reached out to Karthik for a DB setup meeting, but we haven't been able to connect yet. I followed up with him again today and am waiting for his response, as there is a dependency on him.",
+                "Sagar Naik, Sep 23, 1:54 PM: Ping him on the group with Naresh on cc",
+                "Sagar Naik, Sep 24, 7:39 PM: Please send me the status. Also send mail to Manjunadh @Shilav Shinde",
+                "Shilav Shinde, Sep 24, 7:55 PM: Hi @Sagar Naik. I have already shared weekly status update mail to Manjunadh.",
+                "Shilav Shinde, Sep 24, 8:00 PM: PNC-55366: We are not supporting the hyphenated version that's why in the add package functionality we have restricted hyphenated version, I'm working on it. As an immediate solution, we can add the package details from backend because of restriction for hyphenated version.",
+                "Sagar Naik, Sep 24, 10:34 PM: Patch 34 does not have data. Can you clarify @Shilav Shinde. Link: https://releasedashboard.cisco.com/change-log?selectedRelease=3.0.50.034&releaseName=3.0.50.X&releaseId=58&releaseType=Patch&version=3.0&category=3.0&startDate=27+Nov+2024&releaseDisplayName=3.0.50.X&parentReleaseName=Diamond&isCompletedRelease=false&templateName=Confidence+template",
+                "Shilav Shinde, Sep 24, 10:37 PM: As we don't have changelog data for patch 34",
+                "Sagar Naik, Sep 24, 10:38 PM: What about 3.0.50.35.3",
+                "Shilav Shinde, Sep 24, 10:41 PM: Checking on it..will let you know in sometime",
+                "Sagar Naik, Sep 24, 10:50 PM: Ok",
+                "Sagar Naik, Sep 24, 10:53 PM: Also check dates",
+                "Shilav Shinde, Sep 24, 10:53 PM: Okay, sure",
+                "Shilav Shinde, Sep 25, 9:34 AM: Hi @Sagar Naik. Added 'gateway' package for 3.0.50.035.002 manually from backend and created 3.0.50.035.003 hotfix. Also modified the date for 002 and 003 both. As we don't have data in releasechangelogs collection for 002 and 003, that's why both showing current patch in release dashboard. Also checked for release 036, showing 25th Sep 2025 as pd promotion date, it supposed to be extend by 30 Sep.",
+                "Shilav Shinde, Oct 1, 11:21 AM: Hi @Sagar Naik. Quick update on the database backup - We have tried to back up the database using the mongo command with port forwarding to access the database. However, the OpenShift (OC) connection was disconnected during the process, which caused the backup operation to fail. We also implemented logic to retry the connection and resume the backup from where it stopped, but OC continued to deny the connection.",
+                "Sagar Naik, Oct 8, 1:18 PM: Hi. Any update on db backup and other things",
+                "Shilav Shinde, Oct 8, 1:19 PM: Hi",
+                "Shilav Shinde, Oct 8, 1:25 PM: It's in progress. I'll provide you with a detailed update on the db_backup by evening. Still working on it.",
+                "Sagar Naik, Oct 8, 1:40 PM: Ok",
+                "Shilav Shinde, Oct 23, 9:19 AM: Hi @Sagar Naik. Health Check for Collections and status of release dashboard - Release 3.0.50.040 has started. As of now its in PD promotion stage, there is no data available since we don't have data in releasechangelogs collection. PD and PnC Tags - No tags data in pdpnctags collection for 040, Earlier received tags data for 039 release. Metrics Job Last Run (tenants) = '2025-10-01T05:30:00Z' (base_url: https://miggbo.atlassian.net/, jira_type:'cloud'). Releasechangelogs - No release change logs data available for 040. Earlier have releasechangelog data for 039. Tags - release/0.10.532, rc/0.10.533 fetched tags of core-platform package on 22-10-2025. cc: @Gautam Kumar",
+                "Sagar Naik, Oct 24, 9:20 AM: Release 3.0.50.040 has started. As of now its in PD promotion stage, there is no data available since we don't have data in releasechangelogs collection. Support for hyphenated version task (PNC-55366): Done code changes, testing is in progress. DB backup mechanism and test environment (PNC-57488): awaiting a VM, accessible from the CAE console, from Karthikeyan to proceed with testing the workaround. No progress on backup and hyphenated version since 2 weeks?",
+                "Shilav Shinde, Oct 24, 10:05 AM: Hi @Sagar Naik. We were unable to test the code changes of Hyphenated version due to dev environment. A VM is pending provision to proceed with testing the database backup activity. In the meantime, I implemented a workaround to test the code changes with the local database and am now validating those changes.",
+                "Sagar Naik, Oct 24, 10:07 AM: Get it merged after validation. It should not affect the dashboard",
+                "Shilav Shinde, Oct 24, 10:10 AM: Sure @Sagar Naik",
+                "Shilav Shinde, Oct 29, 10:47 AM: Hi @Sagar Naik. Health Check for Collections and status of release dashboard - Release 3.0.50.041 has started. As of now its in PD promotion stage. Release 3.0.50.040 has been promoted, and the release change logs data is also available. PD and PnC Tags, Tags, Releasechangelogs, tenants collection data are up to date. cc: @Gautam Kumar",
+            ]
+            store.add_documents(conversation_documents)
+            self.vector_store = store
+            console.print(f"[green]✓ Initialized vector store with {len(conversation_documents)} conversation messages[/green]")
+        except Exception as exc:
+            console.print(f"[yellow]Warning: Could not initialize vector store: {exc}[/yellow]")
             console.print("[yellow]RAG will be disabled. Continuing without vector database...[/yellow]")
             self.use_rag = False
-            self.chroma_collection = None
+            self.vector_store = None
 
     def retrieve_context(self, query: str, n_results: int = 3) -> str:
-        """Retrieve relevant context from ChromaDB vector database"""
+        """Retrieve relevant context from vector store vector database"""
         if not self.use_rag or not self.chroma_collection:
             return ""
         
@@ -256,13 +241,13 @@ Please provide a helpful answer based on the context above."""
     def display_welcome(self):
         """Display welcome message and instructions"""
         welcome_text = Text("🤖 Local LLM Chatbot with RAG", style="bold blue")
-        subtitle = Text("Powered by Ollama + ChromaDB - Running completely offline", style="dim cyan")
+        subtitle = Text("Powered by Ollama + Local Vector Store - Running completely offline", style="dim cyan")
         rag_status = "[green]✓ RAG Enabled[/green]" if self.use_rag else "[yellow]⚠ RAG Disabled[/yellow]"
 
         panel = Panel.fit(
             f"{welcome_text}\n{subtitle}\n\n"
             f"RAG Status: {rag_status}\n"
-            "The chatbot uses ChromaDB to retrieve relevant context from previous conversations.\n\n"
+            "The chatbot uses a lightweight vector store to retrieve relevant context from previous conversations.\n\n"
             "Commands:\n"
             "• Type your message and press Enter to chat\n"
             "• Type '/clear' to clear conversation history\n"
@@ -364,7 +349,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Local LLM Chatbot with RAG using Ollama and ChromaDB",
+        description="Local LLM Chatbot with RAG using Ollama and a local vector store",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

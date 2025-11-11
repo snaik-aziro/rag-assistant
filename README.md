@@ -4,7 +4,7 @@ A powerful chatbot that runs completely offline using local Large Language Model
 
 ## ✨ Features
 
-- **RAG Pipeline**: Uses ChromaDB vector database to retrieve relevant context from conversations
+- **RAG Pipeline**: Uses lightweight vector store vector database to retrieve relevant context from conversations
 - **Offline Operation**: Runs completely without internet after setup
 - **Modern Web UI**: Beautiful, magical-looking web interface with animations and effects
 - **Terminal Interface**: Rich terminal-based interface with colorful output

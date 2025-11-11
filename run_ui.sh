@@ -1,9 +1,35 @@
 #!/bin/bash
-# Run the web UI for the RAG Chatbot
+# Run the Release Dashboard AI Assistant web UI
 
-cd "$(dirname "$0")"
-echo "🚀 Starting RAG Chatbot Web UI..."
-echo "📱 Open http://localhost:5002 in your browser"
+set -e
+
+PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
+VENV_PATH="$PROJECT_ROOT/.venv"
+PORT="${PORT:-5002}"
+
+cd "$PROJECT_ROOT"
+
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+if [ ! -d "$VENV_PATH" ]; then
+  echo "🐍 Creating Python virtual environment..."
+  "$PYTHON_BIN" -m venv "$VENV_PATH"
+  "$VENV_PATH/bin/pip" install --upgrade pip
+  "$VENV_PATH/bin/pip" install -r requirements.txt
+fi
+
+echo "🔍 Checking Ollama service..."
+if ! curl -sf "http://localhost:11434/api/tags" >/dev/null 2>&1; then
+  cat <<'EOF'
+⚠️  Ollama does not appear to be running.
+   Start it in another terminal with:
+     ollama serve
+EOF
+  exit 1
+fi
+
+echo "🚀 Starting Release Dashboard AI Assistant..."
+echo "📱 Open http://localhost:${PORT} in your browser"
 echo ""
-python3 src/app.py
 
+"$VENV_PATH/bin/python" src/app.py --host 0.0.0.0 --port "$PORT"
