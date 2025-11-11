@@ -158,25 +158,19 @@ class LocalChatbot:
             self.vector_store = None
 
     def retrieve_context(self, query: str, n_results: int = 3) -> str:
-        """Retrieve relevant context from vector store vector database"""
-        if not self.use_rag or not self.chroma_collection:
+        """Retrieve relevant context from the local vector store."""
+        if not self.use_rag or not self.vector_store:
             return ""
-        
-        try:
-            results = self.chroma_collection.query(
-                query_texts=[query],
-                n_results=n_results
-            )
-            
-            if results and 'documents' in results and results['documents']:
-                documents = results['documents'][0]
-                context = "\n".join([f"- {doc}" for doc in documents])
-                return f"\n\nRelevant context from conversation:\n{context}\n"
-            else:
-                return ""
-        except Exception as e:
-            console.print(f"[yellow]Warning: Error retrieving context: {e}[/yellow]")
+
+        results = self.vector_store.search(query, top_k=n_results)
+        if not results:
             return ""
+
+        context_lines = [
+            f"- (score: {result.score:.2f}) {result.text}"
+            for result in results
+        ]
+        return "\n\nRelevant context from conversation:\n" + "\n".join(context_lines) + "\n"
 
     def generate_response(self, user_message: str) -> Optional[str]:
         """Generate response from the model with RAG context"""
