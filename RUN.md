@@ -26,14 +26,21 @@ You can replace `llama2` with any other model from the Ollama library.
 
 ## 3. Launch the Web UI
 
-In a new terminal:
+In a new terminal (macOS/Linux):
 
 ```bash
 cd /Users/sagar.naik/Desktop/local-llm
 ./run_ui.sh
 ```
 
-What the script does:
+On Windows (PowerShell or Command Prompt):
+
+```powershell
+cd C:\Users\sagar.naik\Desktop\local-llm
+run_ui_windows.bat
+```
+
+What the scripts do:
 
 1. Creates a local virtual environment in `.venv` (if missing)
 2. Installs `requirements.txt`
